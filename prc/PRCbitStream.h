@@ -1,8 +1,8 @@
 /************
 *
 *   This file is part of a tool for producing 3D content in the PRC format.
-*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com> and
-*                       Michail Vidiassov <master@iaas.msu.ru>
+*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
+*   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -34,12 +34,16 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned long uint32_t;
 #endif // _MSC_VER >= 1600
+#elif defined __BORLANDC__
+#include <stdint.h>
 #else
 #include <inttypes.h>
 #endif // _MSC_VER
 #include <string>
 #include <iostream>
 #include <stdlib.h>
+
+namespace prc {
 
 #define CHUNK_SIZE (1024)
 // Is this a reasonable initial size?
@@ -83,5 +87,15 @@ class PRCbitStream
     bool compressed;
     uint32_t compressedDataSize;
 };
+
+#define WriteUnsignedInteger( value ) pbs << (uint32_t)(value);
+#define WriteInteger( value ) pbs << (int32_t)(value);
+#define WriteCharacter( value ) pbs << (uint8_t)(value);
+#define WriteDouble( value ) pbs << (double)(value);
+#define WriteBit( value ) pbs << (bool)(value);
+#define WriteBoolean( value ) pbs << (bool)(value);
+#define WriteString( value ) pbs << (value);
+
+} // namespace prc
 
 #endif // __PRC_BIT_STREAM_H

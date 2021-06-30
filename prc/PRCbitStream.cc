@@ -1,8 +1,8 @@
 /************
 *
 *   This file is part of a tool for producing 3D content in the PRC format.
-*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com> and
-*                       Michail Vidiassov <master@iaas.msu.ru>
+*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
+*   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -24,12 +24,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cassert>
+#include <math.h>
 #include "PRCbitStream.h"
 #include "PRCdouble.h"
 
 using std::string;
-using std::cerr;
 using std::endl;
+#ifndef USING_R
+using std::cerr;
+#endif
+
+using namespace prc;
 
 void PRCbitStream::compress()
 {
@@ -42,8 +47,12 @@ void PRCbitStream::compress()
   strm.opaque = Z_NULL;
   if(deflateInit(&strm,Z_DEFAULT_COMPRESSION) != Z_OK)
   {
-    cerr << "Compression initialization failed" << endl;
-    return;
+#ifdef USING_R
+     error("PRCbitStream: Compression initialization failed.\n");
+#else
+     cerr << "PRCbitStream: Compression initialization failed." << endl;
+     exit(1);
+#endif
   }
   unsigned int sizeAvailable = deflateBound(&strm,getSize());
   uint8_t *compressedData = (uint8_t*) malloc(sizeAvailable);
@@ -68,10 +77,14 @@ void PRCbitStream::compress()
 
   if(code != Z_STREAM_END)
   {
-    cerr << "Compression error" << endl;
     deflateEnd(&strm);
     free(compressedData);
-    return;
+#ifdef USING_R
+     error("PRCbitStream: Compression error.\n");
+#else
+     cerr << "PRCbitStream: Compression error." << endl;
+     exit(1);
+#endif
   }
 
   compressed = true;
@@ -90,8 +103,12 @@ void PRCbitStream::write(std::ostream &out) const
   }
   else
   {
-     cerr << "Attempt to write stream before compression." << endl;
+#ifdef USING_R
+     error("PRCbitStream: Attempt to write stream before compression.\n");
+#else
+     cerr << "PRCbitStream: Attempt to write stream before compression." << endl;
      exit(1);
+#endif
   }
 }
 
@@ -152,8 +169,12 @@ PRCbitStream& PRCbitStream::operator <<(double value)
   // write a double
   if(compressed)
   {
-    cerr << "Cannot write to a stream that has been compressed." << endl;
-    return *this;
+#ifdef USING_R
+     error("PRCbitStream: Cannot write to a stream that has been compressed.\n");
+#else
+     cerr << "PRCbitStream: Cannot write to a stream that has been compressed." << endl;
+     exit(1);
+#endif
   }
   union ieee754_double *pid=(union ieee754_double *)&value;
   int
@@ -212,7 +233,7 @@ PRCbitStream& PRCbitStream::operator <<(double value)
 
   writeBit(1);
 
-#ifdef WORDS_BIGENDIAN
+#ifdef PRC_BIG_ENDIAN
   pb=((PRCbyte *)&value)+1;
 #else
   pb=((PRCbyte *)&value)+6;
@@ -222,7 +243,7 @@ PRCbitStream& PRCbitStream::operator <<(double value)
 
   NEXTBYTE(pb);
   pbStart=pb;
-#ifdef WORDS_BIGENDIAN
+#ifdef PRC_BIG_ENDIAN
   pbEnd=
   pbStop= ((PRCbyte *)(&value+1))-1;
 #else
@@ -313,8 +334,12 @@ void PRCbitStream::writeBit(bool b)
 {
   if(compressed)
   {
-    cerr << "Cannot write to a stream that has been compressed." << endl;
-    return;
+#ifdef USING_R
+     error("PRCbitStream: Cannot write to a stream that has been compressed.\n");
+#else
+     cerr << "PRCbitStream: Cannot write to a stream that has been compressed." << endl;
+     exit(1);
+#endif
   }
 
   if(b)
@@ -341,8 +366,12 @@ void PRCbitStream::writeByte(uint8_t u)
 {
   if(compressed)
   {
-    cerr << "Cannot write to a stream that has been compressed." << endl;
-    return;
+#ifdef USING_R
+     error("PRCbitStream: Cannot write to a stream that has been compressed.\n");
+#else
+     cerr << "PRCbitStream: Cannot write to a stream that has been compressed." << endl;
+     exit(1);
+#endif
   }
 
   if(bitIndex == 0)
@@ -398,7 +427,11 @@ void PRCbitStream::getAChunk()
    else
    {
      // warn about memory problem!
-     cerr << "Memory allocation error." << endl;
+#ifdef USING_R
+     error("PRCbitStream: Memory allocation error.\n");
+#else
+     cerr << "PRCbitStream: Memory allocation error." << endl;
      exit(1);
+#endif
    }
 }

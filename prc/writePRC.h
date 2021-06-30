@@ -1,8 +1,8 @@
 /************
 *
 *   This file is part of a tool for producing 3D content in the PRC format.
-*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com> and
-*                       Michail Vidiassov <master@iaas.msu.ru>
+*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
+*   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -25,16 +25,22 @@
 #include <vector>
 #include <deque>
 #include <list>
-
 #include <map>
 #include <iostream>
+#include <algorithm>
 #include "PRCbitStream.h"
 #include "PRC.h"
 #include <float.h>
 #include <math.h>
 
+namespace prc {
+
 static const uint32_t m1=(uint32_t)-1;
-static const double pi=acos(-1.0);
+#ifdef M_PI
+#define PRC_PI M_PI
+#else
+#define PRC_PI acos(-1.0)
+#endif
 
 class PRCVector3d
 {
@@ -117,10 +123,6 @@ class UUID
 }; */
 
 void writeUncompressedUnsignedInteger(std::ostream &out, uint32_t data);
-
-void writeUnit(PRCbitStream &,bool,double);
-
-void writeEmptyMarkups(PRCbitStream&);
 
 class UserData
 {
@@ -222,7 +224,6 @@ class PRCAttribute : public PRCAttributeEntry
   void addKey(const PRCSingleAttribute &key) { attribute_keys.push_back(key); }
   std::deque<PRCSingleAttribute> attribute_keys;
 };
-
 typedef std::list<PRCAttribute> PRCAttributeList;
 
 class PRCAttributes
@@ -234,22 +235,14 @@ class PRCAttributes
   PRCAttributeList attributes;
 };
 
-bool type_eligible_for_reference(uint32_t type);
 uint32_t makeCADID();
 uint32_t makePRCID();
+void resetGraphicsAndName();
 
 class ContentPRCBase : public PRCAttributes
 {
   public:
-  ContentPRCBase(uint32_t t, std::string n="") :
-    type(t),name(n),CAD_identifier(0), CAD_persistent_identifier(0), PRC_unique_identifier(0)
-  {
-    if(type_eligible_for_reference(type))
-    {
-      CAD_identifier = makeCADID();
-      PRC_unique_identifier = makePRCID();
-    }
-  }
+  ContentPRCBase(uint32_t t, std::string n="");
   void serializeContentPRCBase(PRCbitStream&) const;
   uint32_t getPRCID() const { return PRC_unique_identifier; }
   uint32_t getType() const { return type; }
@@ -270,55 +263,6 @@ public:
   uint32_t unique_identifier;
 };
 
-extern std::string currentName;
-void writeName(PRCbitStream&,const std::string&);
-void resetName();
-
-extern uint32_t current_layer_index;
-extern uint32_t current_index_of_line_style;
-extern uint16_t current_behaviour_bit_field;
-
-void writeGraphics(PRCbitStream&,uint32_t=m1,uint32_t=m1,uint16_t=1,bool=false);
-void resetGraphics();
-
-void resetGraphicsAndName();
-
-struct PRCRgbColor
-{
-  PRCRgbColor(double r=0.0, double g=0.0, double b=0.0) :
-    red(r), green(g), blue(b) {}
-  double red,green,blue;
-  void serializeRgbColor(PRCbitStream&);
-
-  bool operator==(const PRCRgbColor &c) const
-  {
-    return (red==c.red && green==c.green && blue==c.blue);
-  }
-  bool operator!=(const PRCRgbColor &c) const
-  {
-    return !(red==c.red && green==c.green && blue==c.blue);
-  }
-  bool operator<(const PRCRgbColor &c) const
-  {
-    if(red!=c.red)
-      return (red<c.red);
-    if(green!=c.green)
-      return (green<c.green);
-    return (blue<c.blue);
-  }
-};
-
-class PRCPicture : public ContentPRCBase
-{
-public:
-  PRCPicture(std::string n="") :
-  ContentPRCBase(PRC_TYPE_GRAPH_Picture,n), format(KEPRCPicture_PNG), uncompressed_file_index(m1), pixel_width(0), pixel_height(0) {}
-  void serializePicture(PRCbitStream&);
-  EPRCPictureDataFormat format;
-  uint32_t uncompressed_file_index;
-  uint32_t pixel_width;
-  uint32_t pixel_height;
-};
 
 struct PRCVector2d
 {
@@ -378,6 +322,109 @@ struct PRCVector2d
   }
 };
 
+#define EQFLD(fld) fld==c.fld
+#define COMPFLD(fld) \
+if(fld != c.fld) \
+  return (fld < c.fld);
+#define PRCMAP(PRCtype) \
+struct PRCtype##Cmp : public std::binary_function <const PRCtype*, const PRCtype*, bool> \
+{ bool operator()(const PRCtype* Left, const PRCtype* Right) const  { return (*Left < *Right); } }; \
+typedef std::map<PRCtype*,uint32_t,PRCtype##Cmp> PRCtype##Map;
+#define PRCLIST(PRCtype) \
+typedef std::deque <PRCtype*>  PRCtype##List;
+
+
+struct PRCRgbColor
+{
+  PRCRgbColor(double r=0.0, double g=0.0, double b=0.0) :
+  red(r), green(g), blue(b) {}
+  double red,green,blue;
+  void serializeRgbColor(PRCbitStream&);
+  
+  bool operator==(const PRCRgbColor &c) const
+  {
+    return (EQFLD(red) &&
+            EQFLD(green) &&
+            EQFLD(blue)
+            );
+  }
+  bool operator!=(const PRCRgbColor &c) const
+  {
+    return !(EQFLD(red) &&
+             EQFLD(green) &&
+             EQFLD(blue)
+             );
+  }
+  bool operator<(const PRCRgbColor &c) const
+  {
+    COMPFLD(red)
+    COMPFLD(green)
+    COMPFLD(blue)
+    return false;
+  }
+};
+typedef std::map<PRCRgbColor,uint32_t> PRCRgbColorMap;
+typedef std::deque<PRCRgbColor>  PRCRgbColorList;
+
+class PRCUncompressedFile
+{
+public:
+  PRCUncompressedFile() {}
+  PRCUncompressedFile(uint32_t fs, uint8_t *d) {
+    file_contents.assign( d, d + fs );  
+  }
+
+  std::vector<uint8_t> file_contents;
+  
+  void serializeUncompressedFile(std::ostream&) const;
+  
+  uint32_t getSize() const;
+  
+  bool operator==(const PRCUncompressedFile& c) const
+  {
+    return file_contents==c.file_contents;
+  }
+  bool operator<(const PRCUncompressedFile& c) const
+  {
+    return file_contents<c.file_contents;
+  }
+};
+PRCLIST(PRCUncompressedFile)
+PRCMAP(PRCUncompressedFile)
+
+class PRCPicture : public ContentPRCBase
+{
+public:
+  PRCPicture(std::string n="") :
+  ContentPRCBase(PRC_TYPE_GRAPH_Picture,n), format(KEPRCPicture_PNG), uncompressed_file_index(m1), pixel_width(0), pixel_height(0) {}
+  void serializePicture(PRCbitStream&);
+  EPRCPictureDataFormat format;
+  uint32_t uncompressed_file_index;
+  uint32_t pixel_width;
+  uint32_t pixel_height;
+  bool operator==(const PRCPicture& c) const
+  {
+    return (EQFLD(format) &&
+            EQFLD(uncompressed_file_index) &&
+            EQFLD(pixel_width) &&
+            EQFLD(pixel_height) &&
+            EQFLD(name)
+            );
+  }
+  bool operator<(const PRCPicture& c) const
+  {
+    COMPFLD(format)
+    COMPFLD(uncompressed_file_index)
+    COMPFLD(pixel_width)
+    COMPFLD(pixel_height)
+    COMPFLD(name)
+    return false;
+  }
+};
+PRCLIST(PRCPicture)
+PRCMAP(PRCPicture)
+
+
 class PRCTextureDefinition : public ContentPRCBase
 {
 public:
@@ -410,8 +457,37 @@ public:
   // double X_homegeneous_coord;
   // double Y_homegeneous_coord;
   // double origin_homegeneous_coord;
+  
+  bool operator==(const PRCTextureDefinition& c) const
+  {
+    return (EQFLD(picture_index) &&
+            EQFLD(texture_mapping_attribute) &&
+            EQFLD(texture_mapping_attribute_intensity) &&
+            EQFLD(texture_mapping_attribute_components) &&
+            EQFLD(texture_function) &&
+            EQFLD(texture_applying_mode) &&
+            EQFLD(texture_wrapping_mode_S) &&
+            EQFLD(texture_wrapping_mode_T) &&
+            EQFLD(name)
+            );
+  }
+  bool operator<(const PRCTextureDefinition& c) const
+  {
+    COMPFLD(picture_index)
+    COMPFLD(texture_mapping_attribute)
+    COMPFLD(texture_mapping_attribute_intensity)
+    COMPFLD(texture_mapping_attribute_components)
+    COMPFLD(texture_function)
+    COMPFLD(texture_applying_mode)
+    COMPFLD(texture_wrapping_mode_S)
+    COMPFLD(texture_wrapping_mode_T)
+    COMPFLD(name)
+    return false;
+  }
+
 };
-typedef std::deque <PRCTextureDefinition*>  PRCTextureDefinitionList;
+PRCLIST(PRCTextureDefinition)
+PRCMAP(PRCTextureDefinition)
 
 class PRCMaterial
 {
@@ -419,7 +495,7 @@ public:
   virtual ~PRCMaterial() {}
   virtual void serializeMaterial(PRCbitStream&) = 0;
 };
-typedef std::deque <PRCMaterial*>  PRCMaterialList;
+PRCLIST(PRCMaterial)
 
 class PRCMaterialGeneric : public ContentPRCBase, public PRCMaterial
 {
@@ -432,7 +508,6 @@ public:
     {}
   void serializeMaterialGeneric(PRCbitStream&);
   void serializeMaterial(PRCbitStream &pbs) { serializeMaterialGeneric(pbs); }
-  uint32_t picture_index;
   uint32_t ambient;
   uint32_t diffuse;
   uint32_t emissive;
@@ -443,12 +518,36 @@ public:
   double emissive_alpha;
   double specular_alpha;
 
-  bool operator==(const PRCMaterialGeneric &m) const
+  bool operator==(const PRCMaterialGeneric& c) const
   {
-    return (ambient==m.ambient && diffuse==m.diffuse && emissive==m.emissive && specular==m.specular && shininess==m.shininess &&
-            ambient_alpha==m.ambient_alpha && diffuse_alpha==m.diffuse_alpha && emissive_alpha==m.emissive_alpha && specular_alpha==m.specular_alpha);
+    return (EQFLD(ambient) &&
+            EQFLD(diffuse) &&
+            EQFLD(emissive) &&
+            EQFLD(specular) &&
+            EQFLD(shininess) &&
+            EQFLD(ambient_alpha) &&
+            EQFLD(diffuse_alpha) &&
+            EQFLD(emissive_alpha) &&
+            EQFLD(specular_alpha) &&
+            EQFLD(name)
+            );
+  }
+  bool operator<(const PRCMaterialGeneric& c) const
+  {
+    COMPFLD(ambient)
+    COMPFLD(diffuse)
+    COMPFLD(emissive)
+    COMPFLD(specular)
+    COMPFLD(shininess)
+    COMPFLD(ambient_alpha)
+    COMPFLD(diffuse_alpha)
+    COMPFLD(emissive_alpha)
+    COMPFLD(specular_alpha)
+    COMPFLD(name)
+    return false;
   }
 };
+PRCMAP(PRCMaterialGeneric)
 
 class PRCTextureApplication : public ContentPRCBase, public PRCMaterial
 {
@@ -464,7 +563,27 @@ public:
   uint32_t texture_definition_index;
   uint32_t next_texture_index;
   uint32_t UV_coordinates_index;
+  
+  bool operator==(const PRCTextureApplication& c) const
+  {
+    return (EQFLD(material_generic_index) &&
+            EQFLD(texture_definition_index) &&
+            EQFLD(next_texture_index) &&
+            EQFLD(UV_coordinates_index) &&
+            EQFLD(name)
+            );
+  }
+  bool operator<(const PRCTextureApplication& c) const
+  {
+    COMPFLD(material_generic_index)
+    COMPFLD(texture_definition_index)
+    COMPFLD(next_texture_index)
+    COMPFLD(UV_coordinates_index)
+    COMPFLD(name)
+    return false;
+  }
 };
+PRCMAP(PRCTextureApplication)
 
 class PRCLinePattern : public ContentPRCBase
 {
@@ -476,9 +595,28 @@ public:
   std::vector<double> lengths;
   double phase;
   bool is_real_length;
-};
-typedef std::deque <PRCLinePattern*>  PRCLinePatternList;
+  bool operator==(const PRCLinePattern& c) const
+  {
+    return (
+            EQFLD(lengths) &&
+            EQFLD(phase) &&
+            EQFLD(is_real_length) &&
+            EQFLD(name)
+            );
+  }
+  bool operator<(const PRCLinePattern& c) const
+  {
+    COMPFLD(lengths)
+    COMPFLD(phase)
+    COMPFLD(is_real_length)
+    COMPFLD(name)
+    return false;
+  }
 
+};
+PRCLIST(PRCLinePattern)
+PRCMAP(PRCLinePattern)
+  
 class PRCStyle : public ContentPRCBase
 {
 public:
@@ -495,8 +633,41 @@ public:
   bool is_transparency_defined;
   uint8_t transparency;
   uint8_t additional;
+  bool operator==(const PRCStyle& c) const
+  {
+    return (EQFLD(line_width) &&
+            EQFLD(is_vpicture) &&
+            EQFLD(line_pattern_vpicture_index) &&
+            EQFLD(is_material) &&
+            EQFLD(color_material_index) &&
+            EQFLD(is_transparency_defined) &&
+            EQFLD(transparency) &&
+            EQFLD(additional) &&
+            EQFLD(name)
+            );
+  }
+  bool operator<(const PRCStyle& c) const
+  {
+    COMPFLD(line_width)
+    COMPFLD(is_vpicture)
+    COMPFLD(line_pattern_vpicture_index)
+    COMPFLD(is_material)
+    COMPFLD(color_material_index)
+    COMPFLD(is_transparency_defined)
+    COMPFLD(transparency)
+    COMPFLD(additional)
+    COMPFLD(name)
+    return false;
+  }
+
 };
-typedef std::deque <PRCStyle*>  PRCStyleList;
+PRCLIST(PRCStyle)
+PRCMAP(PRCStyle)
+
+#undef EQFLD
+#undef COMPFLD
+#undef PRCMAP
+
 
 class PRCTessFace
 {
@@ -517,6 +688,25 @@ public:
   bool is_rgba;
   std::vector<uint8_t> rgba_vertices;
   uint32_t behaviour;
+  bool operator==(const PRCTessFace &f) const
+  {
+    return (
+      line_attributes==f.line_attributes &&
+      start_wire==f.start_wire &&
+      sizes_wire==f.sizes_wire &&
+      used_entities_flag==f.used_entities_flag &&
+      start_triangulated==f.start_triangulated &&
+      sizes_triangulated==f.sizes_triangulated &&
+      number_of_texture_coordinate_indexes==f.number_of_texture_coordinate_indexes &&
+      is_rgba==f.is_rgba &&
+      rgba_vertices==f.rgba_vertices &&
+      behaviour==f.behaviour
+    );
+  }
+  bool operator!=(const PRCTessFace &f) const
+  {
+    return !(*this==f);
+  }
 };
 typedef std::deque <PRCTessFace*>  PRCTessFaceList;
 
@@ -558,6 +748,31 @@ public:
   std::vector<uint32_t> triangulated_index;
   PRCTessFaceList face_tessellation;
   std::vector<double> texture_coordinate;
+  bool operator==(const PRC3DTess &t) const
+  {
+    if (
+        is_calculated==t.is_calculated &&
+        coordinates==t.coordinates &&
+        has_faces==t.has_faces &&
+        has_loops==t.has_loops &&
+        crease_angle==t.crease_angle &&
+        normal_coordinate==t.normal_coordinate &&
+        wire_index==t.wire_index &&
+        triangulated_index==t.triangulated_index &&
+        face_tessellation.size()==t.face_tessellation.size() &&
+        texture_coordinate==t.texture_coordinate
+        ) {
+      for(PRCTessFaceList::const_iterator it=face_tessellation.begin(), tit=t.face_tessellation.begin(); it!=face_tessellation.end(); ++it, ++tit)
+        if (**it!=**tit)
+          return false;
+      return true;
+    } else
+      return false;
+  }
+  bool operator!=(const PRC3DTess &t) const
+  {
+    return !(*this==t);
+  }
 };
 
 class PRC3DWireTess : public PRCTess
@@ -572,6 +787,20 @@ public:
   bool is_segment_color;
   std::vector<uint32_t> wire_indexes;
   std::vector<uint8_t> rgba_vertices;
+  bool operator==(const PRC3DWireTess &t) const
+  {
+    return (
+        is_calculated==t.is_calculated &&
+        coordinates==t.coordinates &&
+        is_rgba==t.is_rgba &&
+        is_segment_color==t.is_segment_color &&
+        wire_indexes==t.wire_indexes &&
+        rgba_vertices==t.rgba_vertices);
+  }
+  bool operator!=(const PRC3DWireTess &t) const
+  {
+    return !(*this==t);
+  }
 };
 
 class PRCMarkupTess : public PRCTess
@@ -587,6 +816,20 @@ public:
   std::vector<std::string> texts;
   std::string label;
   uint8_t behaviour;
+  bool operator==(const PRCMarkupTess &t) const
+  {
+    return (
+            is_calculated==t.is_calculated &&
+            coordinates==t.coordinates &&
+            codes==t.codes &&
+            texts==t.texts &&
+            label==t.label &&
+            behaviour==t.behaviour);
+  }
+  bool operator!=(const PRCMarkupTess &t) const
+  {
+    return !(*this==t);
+  }
 };
 
 class PRCGraphics
@@ -601,8 +844,6 @@ public:
   uint16_t behaviour_bit_field;
 };
 typedef std::deque <PRCGraphics*>  PRCGraphicsList;
-
-void writeGraphics(PRCbitStream&,const PRCGraphics&,bool=false);
 
 class PRCMarkup: public PRCGraphics, public ContentPRCBase
 {
@@ -619,6 +860,7 @@ public:
 };
 typedef std::deque <PRCMarkup*>  PRCMarkupList;
 
+  
 class PRCAnnotationItem: public PRCGraphics, public ContentPRCBase
 {
 public:
@@ -745,54 +987,62 @@ public:
   
   void serializeGeneralTransformation3d(PRCbitStream&) const;
   void serializeTransformation3d(PRCbitStream& pbs)  const { serializeGeneralTransformation3d(pbs); }
-  double mat[4][4];
+  double m_coef[16];
   bool operator==(const PRCGeneralTransformation3d &t) const
   {
-    for (size_t i=0;i<4;i++)
-      for (size_t j=0;j<4;j++)
-        if(mat[i][j]!=t.mat[i][j])
+    for (size_t i=0;i<16;i++)
+        if(m_coef[i]!=t.m_coef[i])
          return false;
     return true;
   }
   bool operator<(const PRCGeneralTransformation3d &t) const
   {
-    for (size_t i=0;i<4;i++)
-      for (size_t j=0;j<4;j++)
-        if(mat[i][j]!=t.mat[i][j])
+    for (size_t i=0;i<16;i++)
+        if(m_coef[i]!=t.m_coef[i])
         {
-          return (mat[i][j]<t.mat[i][j]);
+          return (m_coef[i]<t.m_coef[i]);
         }
     return false;
   }
   void set(const double t[])
   {
     if(t!=NULL) 
-     for (size_t i=0;i<4;i++)
-       for (size_t j=0;j<4;j++)
-         mat[i][j]=t[4*i+j];
+      for (size_t i=0;i<16;i++)
+          m_coef[i]=t[i];
+    else
+      setidentity();
+  }
+  void set(const float t[])
+  {
+    if(t!=NULL) 
+      for (size_t i=0;i<16;i++)
+        m_coef[i]=t[i];
     else
       setidentity();
   }
   void setidentity()
   {
-    mat[0][0]=1; mat[0][1]=0; mat[0][2]=0; mat[0][3]=0;
-    mat[1][0]=0; mat[1][1]=1; mat[1][2]=0; mat[1][3]=0;
-    mat[2][0]=0; mat[2][1]=0; mat[2][2]=1; mat[2][3]=0;
-    mat[3][0]=0; mat[3][1]=0; mat[3][2]=0; mat[3][3]=1;
+    m_coef[0]=1; m_coef[4]=0; m_coef[ 8]=0; m_coef[12]=0;
+    m_coef[1]=0; m_coef[5]=1; m_coef[ 9]=0; m_coef[13]=0;
+    m_coef[2]=0; m_coef[6]=0; m_coef[10]=1; m_coef[14]=0;
+    m_coef[3]=0; m_coef[7]=0; m_coef[11]=0; m_coef[15]=1;
+  }
+  bool isnotidtransform() const {
+    return(
+           m_coef[0]!=1 || m_coef[4]!=0 || m_coef[ 8]!=0 || m_coef[12]!=0 ||
+           m_coef[1]!=0 || m_coef[5]!=1 || m_coef[ 9]!=0 || m_coef[13]!=0 ||
+           m_coef[2]!=0 || m_coef[6]!=0 || m_coef[10]!=1 || m_coef[14]!=0 ||
+           m_coef[3]!=0 || m_coef[7]!=0 || m_coef[11]!=0 || m_coef[15]!=1 );
   }
   bool isidtransform() const {
     return(
-    mat[0][0]==1 && mat[0][1]==0 && mat[0][2]==0 && mat[0][3]==0 &&
-    mat[1][0]==0 && mat[1][1]==1 && mat[1][2]==0 && mat[1][3]==0 &&
-    mat[2][0]==0 && mat[2][1]==0 && mat[2][2]==1 && mat[2][3]==0 &&
-    mat[3][0]==0 && mat[3][1]==0 && mat[3][2]==0 && mat[3][3]==1);
-  }
-  bool isnotidtransform() const {
-    return !isidtransform();
+           m_coef[0]==1 && m_coef[4]==0 && m_coef[ 8]==0 && m_coef[12]==0 &&
+           m_coef[1]==0 && m_coef[5]==1 && m_coef[ 9]==0 && m_coef[13]==0 &&
+           m_coef[2]==0 && m_coef[6]==0 && m_coef[10]==1 && m_coef[14]==0 &&
+           m_coef[3]==0 && m_coef[7]==0 && m_coef[11]==0 && m_coef[15]==1 );
   }
   double M(size_t i, size_t j) const {
-    // Like Fortran, PRC uses transposed (column-major) format!
-    return mat[j][i];
+    return m_coef[i+j*4];
   }
 };
 typedef std::deque <PRCGeneralTransformation3d> PRCGeneralTransformation3dList;
@@ -841,9 +1091,10 @@ class PRCTransformation
 {
 public:
   PRCTransformation() :
-    has_transformation(false), geometry_is_2D(false), behaviour(PRC_TRANSFORMATION_Identity),
+    mandatory(false), has_transformation(false), geometry_is_2D(false), behaviour(PRC_TRANSFORMATION_Identity),
     origin(0.0,0.0,0.0), x_axis(1.0,0.0,0.0), y_axis(0.0,1.0,0.0), scale(1) {}
   void serializeTransformation(PRCbitStream&);
+  bool mandatory; // strange experimental effect dealing with planes
   bool has_transformation;
   bool geometry_is_2D;
   uint8_t behaviour;
@@ -915,7 +1166,7 @@ class PRCBoundingBox
 {
 public:
   PRCBoundingBox() : min(0.0,0.0,0.0), max(0.0,0.0,0.0) {}
-  PRCBoundingBox(const PRCVector3d &m1, const PRCVector3d& m2) : min(m1),max(m2) {}
+  PRCBoundingBox(const PRCVector3d &m, const PRCVector3d& M) : min(m),max(M) {}
   void serializeBoundingBox(PRCbitStream &pbs);
   PRCVector3d min;
   PRCVector3d max;
@@ -953,10 +1204,11 @@ public:
 class PRCUVParameterization
 {
 public:
-  PRCUVParameterization() : swap_uv(false),
+  PRCUVParameterization() : noswap_uv(false), swap_uv(false),
     parameterization_on_u_coeff_a(1), parameterization_on_v_coeff_a(1),
     parameterization_on_u_coeff_b(0), parameterization_on_v_coeff_b(0) {}
   void serializeUVParameterization(PRCbitStream &pbs);
+  bool noswap_uv;
   bool swap_uv;
   PRCDomain uv_domain;
   double parameterization_on_u_coeff_a;
@@ -1080,9 +1332,9 @@ class PRCCircle : public PRCCurve, public PRCTransformation, public PRCParameter
 {
 public:
   PRCCircle() :
-    PRCCurve(), PRCParameterization(0,2*pi) {}
+    PRCCurve(), PRCParameterization(0,2*PRC_PI) {}
   PRCCircle(std::string n) :
-    PRCCurve(n), PRCParameterization(0,2*pi) {}
+    PRCCurve(n), PRCParameterization(0,2*PRC_PI) {}
   void  serializeCircle(PRCbitStream &pbs);
   void  serializeCurve(PRCbitStream &pbs) { serializeCircle(pbs); }
   double radius;
@@ -1148,6 +1400,19 @@ public:
   double radius;
 };
 
+class PRCPlane : public PRCSurface, public PRCTransformation, public PRCUVParameterization
+{
+public:
+  PRCPlane() :
+  PRCSurface() { mandatory = true; noswap_uv = true; }
+  PRCPlane(std::string n) :
+    PRCSurface(n) { mandatory = true; noswap_uv = true; }
+  void  serializePlane(PRCbitStream &pbs);
+  void  serializeSurface(PRCbitStream &pbs) { serializePlane(pbs); }
+};
+typedef std::deque <PRCPlane*>  PRCPlaneList;
+
+  
 class PRCCone : public PRCSurface, public PRCTransformation, public PRCUVParameterization
 {
 public:
@@ -1185,7 +1450,7 @@ public:
   double major_radius;
   double minor_radius;
 };
-
+  
 class PRCBaseTopology : public PRCAttributes
 {
 public:
@@ -1422,7 +1687,38 @@ public:
   double unit;
 };
 
-class PRCProductOccurrence: public PRCGraphics, public ContentPRCBase
+   
+class PRCMarkups
+{
+public:
+  ~PRCMarkups() {
+   for(PRCMarkupList::iterator it=markups.begin(); it!=markups.end(); ++it) delete *it;
+   for(PRCAnnotationItemList::iterator it=annotation_entities.begin(); it!=annotation_entities.end(); ++it) delete *it;
+  }
+
+  PRCMarkupList markups;
+  PRCAnnotationItemList annotation_entities;
+  void serializeMarkups(PRCbitStream&);
+  uint32_t addMarkup(PRCMarkup*& pMarkup);
+  uint32_t addAnnotationItem(PRCAnnotationItem*& pAnnotationItem);
+};
+
+  
+class PRCSceneDisplayParameters: public ContentPRCBase
+{
+public:
+  PRCSceneDisplayParameters(std::string n="") :
+  ContentPRCBase(PRC_TYPE_GRAPH_SceneDisplayParameters,n),
+  is_active(true), is_absolute(false) {}
+  ~PRCSceneDisplayParameters() { for(PRCPlaneList::iterator it=clipping_planes.begin(); it!=clipping_planes.end(); ++it) delete *it;}
+  void serializeSceneDisplayParameters(PRCbitStream&);
+  bool is_active;
+  PRCPlaneList clipping_planes;
+  bool is_absolute;
+};
+typedef std::deque <PRCSceneDisplayParameters*>  PRCSceneDisplayParametersList;
+
+class PRCProductOccurrence: public PRCGraphics, public ContentPRCBase, public PRCMarkups
 {
 public:
   PRCProductOccurrence(std::string n="") :
@@ -1432,7 +1728,7 @@ public:
     index_external_data(m1), external_data_in_same_file_structure(true),
     product_behaviour(0), product_information_flags(0), product_load_status(KEPRCProductLoadStatus_Loaded),
     location(NULL) {}
-  ~PRCProductOccurrence() { delete location; }
+  ~PRCProductOccurrence() { delete location; for(PRCSceneDisplayParametersList::iterator it=scene_display_parameters.begin(); it!=scene_display_parameters.end(); ++it) delete *it;}
   void setLocation(PRCGeneralTransformation3d*& transform) { location = transform; transform = NULL; }
   void serializeProductOccurrence(PRCbitStream&);
   uint32_t index_part;
@@ -1448,10 +1744,11 @@ public:
   uint8_t product_information_flags;
   EPRCProductLoadStatus product_load_status;
   PRCGeneralTransformation3d *location;
+  PRCSceneDisplayParametersList scene_display_parameters;
 };
 typedef std::deque <PRCProductOccurrence*>  PRCProductOccurrenceList;
 
-class PRCPartDefinition: public PRCGraphics, public ContentPRCBase, public PRCBoundingBox
+class PRCPartDefinition: public PRCGraphics, public ContentPRCBase, public PRCBoundingBox, public PRCMarkups
 {
 public:
 	PRCPartDefinition(std::string n="") :
@@ -1468,5 +1765,7 @@ public:
 	PRCRepresentationItemList representation_item;
 };
 typedef std::deque <PRCPartDefinition*>  PRCPartDefinitionList;
+
+} // namespace prc
 
 #endif //__WRITE_PRC_H

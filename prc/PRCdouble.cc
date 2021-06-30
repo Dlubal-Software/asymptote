@@ -1,10 +1,12 @@
 #include "PRCdouble.h"
 
+namespace prc {
+
 // from Adobe's documentation
 
 PRCdword stadwZero[2]={DOUBLEWITHTWODWORD(0x00000000,0x00000000)};
 PRCdword stadwNegativeZero[2]={DOUBLEWITHTWODWORD(0x80000000,0x00000000)};
-
+/*
 struct sCodageOfFrequentDoubleOrExponent* getcofdoe(unsigned Bits, short NumberOfBits)
 {
   struct sCodageOfFrequentDoubleOrExponent *pcofdoe;
@@ -15,14 +17,14 @@ struct sCodageOfFrequentDoubleOrExponent* getcofdoe(unsigned Bits, short NumberO
   }
   return NULL;
 }
-
+*/
 int stCOFDOECompare(const void* pcofdoe1,const void* pcofdoe2)
 {
   return(EXPONENT(((const struct sCodageOfFrequentDoubleOrExponent *)pcofdoe1)->u2uod.Value)-
       EXPONENT(((const struct sCodageOfFrequentDoubleOrExponent *)pcofdoe2)->u2uod.Value));
 }
 
-#ifdef WORDS_BIGENDIAN
+#ifdef PRC_BIG_ENDIAN
 #ifndef HAVE_MEMRCHR
 void *memrchr(const void *buf,int c,size_t count)
 {
@@ -2119,3 +2121,5 @@ sCodageOfFrequentDoubleOrExponent acofdoe[NUMBEROFELEMENTINACOFDOE] =
         {VT_exponent,21,0x68e91,{DOUBLEWITHTWODWORDINTREE(0x7fe00000,0x00000000)}},
         {VT_exponent,21,0x68e98,{DOUBLEWITHTWODWORDINTREE(0x7ff80000,0x00000000)}},
 }; // End of acofdoe array
+
+} // namespace prc

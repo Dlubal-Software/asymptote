@@ -12,9 +12,13 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned long uint32_t;
 #endif // _MSC_VER >= 1600
+#elif defined __BORLANDC__
+#include <stdint.h>
 #else
 #include <inttypes.h>
 #endif // _MSC_VER
+
+namespace prc {
 
 //const uint32_t PRCVersion=7094;   // For Adobe Reader 8 or later
 const uint32_t PRCVersion=8137; // For Adobe Reader 9 or later
@@ -508,5 +512,7 @@ enum EPRCCharSet
 #define PRC_BODY_BBOX_Evaluation 0x0001 // Bounding box based on geometry. 
 #define PRC_BODY_BBOX_Precise    0x0002 // Bounding box based on tessellation. 
 #define PRC_BODY_BBOX_CADData    0x0003 // Bounding box given by a CAD data file. 
+
+} // namespace prc
 
 #endif // __PRC_H

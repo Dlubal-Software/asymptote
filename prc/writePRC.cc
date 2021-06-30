@@ -1,8 +1,8 @@
 /************
 *
 *   This file is part of a tool for producing 3D content in the PRC format.
-*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com> and
-*                       Michail Vidiassov <master@iaas.msu.ru>
+*   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
+*   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -19,6 +19,7 @@
 *
 *************/
 
+#include "PRCdouble.h"
 #include "writePRC.h"
 #include <climits>
 #include <cassert>
@@ -29,18 +30,19 @@
 #include <fstream>
 #include <sstream>
 
-#if !defined(__GNUC__) || defined(__clang__)
 #include <vector>
-#endif
+
+#include <iterator>
 
 using namespace std;
+using namespace prc;
 
 #ifndef __GNUC_PREREQ
 #define __GNUC_PREREQ(maj, min) (0)
 #endif
 
 // Count leading zeros.
-uint32_t CLZ(uint32_t a) 
+static uint32_t CLZ(uint32_t a) 
 {
 #if __GNUC_PREREQ(3,4)
   return __builtin_clz(a);
@@ -62,26 +64,22 @@ uint32_t CLZ(uint32_t a)
 }
 
 // Portable integer implementation of ceil(log2(x)).
-uint32_t Log2(uint32_t x) 
+static uint32_t Log2(uint32_t x) 
 {
   assert(x != 0);
   uint32_t L=31-CLZ(x);
   return ((uint32_t) 1 << L == x) ? L : L+1;
 }
 
-#define WriteUnsignedInteger( value ) pbs << (uint32_t)(value);
-#define WriteInteger( value ) pbs << (int32_t)(value);
-#define WriteCharacter( value ) pbs << (uint8_t)(value);
-#define WriteDouble( value ) pbs << (double)(value);
-#define WriteBit( value ) pbs << (bool)(value);
-#define WriteBoolean( value ) pbs << (bool)(value);
-#define WriteString( value ) pbs << (value);
 #define SerializeContentPRCBase serializeContentPRCBase(pbs);
 #define SerializeGraphics serializeGraphics(pbs);
 #define SerializePRCBaseWithGraphics { serializeContentPRCBase(pbs); serializeGraphics(pbs); }
 #define SerializeRepresentationItemContent serializeRepresentationItemContent(pbs);
 #define SerializeRepresentationItem( value ) (value)->serializeRepresentationItem(pbs);
-#define SerializeMarkup( value ) (value).serializeMarkup(pbs);
+#define SerializeSceneDisplayParameters( value ) (value)->serializeSceneDisplayParameters(pbs);
+#define SerializeMarkup( value ) value->serializeMarkup(pbs);
+#define SerializeAnnotationEntity( value ) value->serializeAnnotationEntity(pbs);
+#define SerializeMarkups serializeMarkups(pbs);
 #define SerializeReferenceUniqueIdentifier( value ) (value).serializeReferenceUniqueIdentifier(pbs);
 #define SerializeContentBaseTessData serializeContentBaseTessData(pbs);
 #define SerializeTessFace( value ) (value)->serializeTessFace(pbs);
@@ -105,7 +103,6 @@ uint32_t Log2(uint32_t x)
 #define SerializeContentWireEdge  serializeContentWireEdge(pbs);
 #define SerializeContentBody  serializeContentBody(pbs);
 #define SerializeTopoContext  serializeTopoContext(pbs);
-#define SerializeContextAndBodies( value )  (value).serializeContextAndBodies(pbs);
 #define SerializeBody( value )  (value)->serializeBody(pbs);
 #define ResetCurrentGraphics resetGraphics();
 #define SerializeContentSurface  serializeContentSurface(pbs);
@@ -115,13 +112,31 @@ uint32_t Log2(uint32_t x)
 #define SerializeAttributeEntry serializeAttributeEntry(pbs);
 #define SerializeContentSingleAttribute( value ) (value).serializeSingleAttribute(pbs);
 #define SerializeAttribute( value ) (value).serializeAttribute(pbs);
+#define SerializePlane( value ) (value)->serializePlane(pbs);
 #define SerializeAttributeData serializeAttributes(pbs);
 #define WriteUncompressedUnsignedInteger( value ) writeUncompressedUnsignedInteger(out, (uint32_t)(value));
 #define SerializeFileStructureUncompressedUniqueId( value ) (value).serializeFileStructureUncompressedUniqueId(out);
 
-void writeUncompressedUnsignedInteger(ostream &out, uint32_t data)
+static std::string currentName;
+
+static void writeName(PRCbitStream &pbs,const std::string &name)
 {
-#ifdef WORDS_BIGENDIAN
+  pbs << (name == currentName);
+  if(name != currentName)
+  {
+    pbs << name;
+    currentName = name;
+  }
+}
+
+static void resetName()
+{
+  currentName = "";
+}
+
+void prc::writeUncompressedUnsignedInteger(ostream &out, uint32_t data)
+{
+#ifdef PRC_BIG_ENDIAN
   out.write(((char*)&data)+3,1);
   out.write(((char*)&data)+2,1);
   out.write(((char*)&data)+1,1);
@@ -172,19 +187,19 @@ void PRCVector2d::serializeVector2d(PRCbitStream &pbs)
   WriteDouble (y)
 }
 
-uint32_t makeCADID()
+uint32_t prc::makeCADID()
 {
   static uint32_t ID = 1;
   return ID++;
 }
 
-uint32_t makePRCID()
+uint32_t prc::makePRCID()
 {
   static uint32_t ID = 1;
   return ID++;
 }
 
-bool type_eligible_for_reference(uint32_t type)
+static bool type_eligible_for_reference(uint32_t type)
 {
   if(
      type == PRC_TYPE_MISC_EntityReference ||
@@ -226,6 +241,16 @@ bool type_eligible_for_reference(uint32_t type)
     return true;
   else
     return false;
+}
+
+ContentPRCBase::ContentPRCBase(uint32_t t, std::string n) :
+    type(t),name(n),CAD_identifier(0), CAD_persistent_identifier(0), PRC_unique_identifier(0)
+{
+  if(type_eligible_for_reference(type))
+  {
+    CAD_identifier = makeCADID();
+    PRC_unique_identifier = makePRCID();
+  }
 }
 
 void UserData::write(PRCbitStream &pbs)
@@ -313,7 +338,7 @@ void ContentPRCBase::serializeContentPRCBase(PRCbitStream &pbs) const
 }
 
 
-bool IsCompressedType(uint32_t type)
+static bool IsCompressedType(uint32_t type)
 {
   return (type == PRC_TYPE_TOPO_BrepDataCompress || type == PRC_TYPE_TOPO_SingleWireBodyCompress || type == PRC_TYPE_TESS_3D_Compressed);
 }
@@ -327,6 +352,18 @@ void PRCReferenceUniqueIdentifier::serializeReferenceUniqueIdentifier(PRCbitStre
 // if (!reference_in_same_file_structure)
 //    SerializeCompressedUniqueId (target_file_structure)
   WriteUnsignedInteger (unique_identifier)
+}
+
+void PRCUncompressedFile::serializeUncompressedFile(ostream &out) const
+{
+  WriteUncompressedUnsignedInteger (file_contents.size())
+  std::ostream_iterator<uint8_t> out_it (out);
+  copy ( file_contents.begin(), file_contents.end(), out_it );
+}
+
+uint32_t PRCUncompressedFile::getSize() const
+{
+  return sizeof(uint32_t)+file_contents.size();
 }
 
 void PRCRgbColor::serializeRgbColor(PRCbitStream &pbs)
@@ -503,57 +540,9 @@ void PRCStyle::serializeCategory1LineStyle(PRCbitStream &pbs)
      WriteCharacter (additional_3)
 }
 
-std::string currentName;
-
-void writeName(PRCbitStream &pbs,const std::string &name)
-{
-  pbs << (name == currentName);
-  if(name != currentName)
-  {
-    pbs << name;
-    currentName = name;
-  }
-}
-
-void resetName()
-{
-  currentName = "";
-}
-
-uint32_t current_layer_index = m1;
-uint32_t current_index_of_line_style = m1;
-uint16_t current_behaviour_bit_field = 1;
-
-void writeGraphics(PRCbitStream &pbs,uint32_t l,uint32_t i,uint16_t b,bool force)
-{
-  if(force || current_layer_index != l || current_index_of_line_style != i || current_behaviour_bit_field != b)
-  {
-    pbs << false << (uint32_t)(l+1) << (uint32_t)(i+1)
-        << (uint8_t)(b&0xFF) << (uint8_t)((b>>8)&0xFF);
-    current_layer_index = l;
-    current_index_of_line_style = i;
-    current_behaviour_bit_field = b;
-  }
-  else
-    pbs << true;
-}
-
-void writeGraphics(PRCbitStream &pbs,const PRCGraphics &graphics,bool force)
-{
-  if(force || current_layer_index != graphics.layer_index || current_index_of_line_style != graphics.index_of_line_style || current_behaviour_bit_field != graphics.behaviour_bit_field)
-  {
-    pbs << false
-        << (uint32_t)(graphics.layer_index+1)
-        << (uint32_t)(graphics.index_of_line_style+1)
-        << (uint8_t)(graphics.behaviour_bit_field&0xFF)
-        << (uint8_t)((graphics.behaviour_bit_field>>8)&0xFF);
-    current_layer_index = graphics.layer_index;
-    current_index_of_line_style = graphics.index_of_line_style;
-    current_behaviour_bit_field = graphics.behaviour_bit_field;
-  }
-  else
-    pbs << true;
-}
+static uint32_t current_layer_index = m1;
+static uint32_t current_index_of_line_style = m1;
+static uint16_t current_behaviour_bit_field = 1;
 
 void PRCGraphics::serializeGraphics(PRCbitStream &pbs)
 {
@@ -584,14 +573,14 @@ void PRCGraphics::serializeGraphicsForced(PRCbitStream &pbs)
   current_behaviour_bit_field = this->behaviour_bit_field;
 }
 
-void resetGraphics()
+static void resetGraphics()
 {
   current_layer_index = m1;
   current_index_of_line_style = m1;
   current_behaviour_bit_field = 1;
 }
 
-void resetGraphicsAndName()
+void prc::resetGraphicsAndName()
 {
   resetGraphics(); resetName();
 }
@@ -613,6 +602,34 @@ void  PRCMarkup::serializeMarkup(PRCbitStream &pbs)
 //     SerializeReferenceUniqueIdentifier (leaders[i])
   WriteUnsignedInteger (index_tessellation + 1) 
   SerializeUserData
+}
+
+void  PRCMarkups::serializeMarkups(PRCbitStream &pbs)
+{
+   WriteUnsignedInteger (0) // number_of_linked_items
+   WriteUnsignedInteger (0) // number_of_leaders
+   const uint32_t number_of_markups = markups.size();
+   WriteUnsignedInteger (number_of_markups)
+   for (uint32_t i=0;i<number_of_markups;i++)
+      SerializeMarkup (markups[i])
+   const uint32_t number_of_annotation_entities = annotation_entities.size();
+   WriteUnsignedInteger (number_of_annotation_entities)
+   for (uint32_t i=0;i<number_of_annotation_entities;i++)
+      SerializeAnnotationEntity (annotation_entities[i])
+}
+
+uint32_t PRCMarkups::addMarkup(PRCMarkup*& pMarkup)
+{
+   markups.push_back(pMarkup);
+   pMarkup = NULL;
+   return markups.size()-1;
+}
+
+uint32_t PRCMarkups::addAnnotationItem(PRCAnnotationItem*& pAnnotationItem)
+{
+   annotation_entities.push_back(pAnnotationItem);
+   pAnnotationItem = NULL;
+   return annotation_entities.size()-1;
 }
 
 void  PRCAnnotationItem::serializeAnnotationItem(PRCbitStream &pbs)
@@ -764,10 +781,8 @@ void  PRCPolyWire::serializePolyWire(PRCbitStream &pbs)
 void  PRCGeneralTransformation3d::serializeGeneralTransformation3d(PRCbitStream &pbs) const
 {
   WriteUnsignedInteger (PRC_TYPE_MISC_GeneralTransformation)
-  // Like Fortran, PRC uses transposed (column-major) format!
-  for (int j=0;j<4;j++)
-    for (int i=0;i<4;i++)
-     WriteDouble(mat[i][j]); 
+  for (uint32_t i=0; i<16; i++)
+     WriteDouble(m_coef[i]); 
 }
 
 void  PRCCartesianTransformation3d::serializeCartesianTransformation3d(PRCbitStream &pbs) const
@@ -807,9 +822,12 @@ void  PRCCartesianTransformation3d::serializeCartesianTransformation3d(PRCbitStr
 }
 
 void  PRCTransformation::serializeTransformation(PRCbitStream &pbs)
-{ 
-   WriteBit ( has_transformation )
-   if (has_transformation)
+{
+   if (!mandatory) {
+     WriteBit ( has_transformation )
+   }
+
+   if (mandatory || has_transformation)
    {
       WriteCharacter ( behaviour )
       if ( geometry_is_2D )
@@ -861,7 +879,7 @@ void  PRCFontKeysSameFont::serializeFontKeysSameFont(PRCbitStream &pbs)
   }
 }
 
-void SerializeArrayRGBA (const std::vector<uint8_t> &rgba_vertices,const bool is_rgba, PRCbitStream &pbs)
+static void SerializeArrayRGBA (const std::vector<uint8_t> &rgba_vertices,const bool is_rgba, PRCbitStream &pbs)
 {
   uint32_t i = 0;
   uint32_t j = 0;
@@ -1067,19 +1085,6 @@ void  PRCMarkupTess::serializeMarkupTess(PRCbitStream &pbs)
   WriteCharacter (behaviour)
 }
 
-void writeUnit(PRCbitStream &out,bool fromCAD,double unit)
-{
-  out << fromCAD << unit;
-}
-
-void writeEmptyMarkups(PRCbitStream &out)
-{
-  out << (uint32_t)0 // # of linked items
-      << (uint32_t)0 // # of leaders
-      << (uint32_t)0 // # of markups
-      << (uint32_t)0; // # of annotation entities
-}
-
 void PRCBaseTopology::serializeBaseTopology(PRCbitStream &pbs)
 {
    WriteBoolean (base_information)
@@ -1135,7 +1140,9 @@ void PRCParameterization::serializeParameterization(PRCbitStream &pbs)
 
 void PRCUVParameterization::serializeUVParameterization(PRCbitStream &pbs)
 {
-   WriteBoolean ( swap_uv )
+  if (!noswap_uv) {
+    WriteBoolean ( swap_uv )
+  }
    SerializeDomain ( uv_domain )
    WriteDouble ( parameterization_on_u_coeff_a )
    WriteDouble ( parameterization_on_v_coeff_a )
@@ -1194,7 +1201,7 @@ void  PRCNURBSSurface::serializeNURBSSurface(PRCbitStream &pbs)
    WriteUnsignedInteger ( surface_form )
 }
 
-void writeUnsignedIntegerWithVariableBitNumber(PRCbitStream &pbs, uint32_t value, uint32_t bit_number)
+static void writeUnsignedIntegerWithVariableBitNumber(PRCbitStream &pbs, uint32_t value, uint32_t bit_number)
 {
    uint32_t i;
    for(i=0; i<bit_number; i++)
@@ -1213,22 +1220,22 @@ void writeUnsignedIntegerWithVariableBitNumber(PRCbitStream &pbs, uint32_t value
 }
 #define WriteUnsignedIntegerWithVariableBitNumber( value, bit_number )  writeUnsignedIntegerWithVariableBitNumber( pbs, (value), (bit_number) );
 
-void writeIntegerWithVariableBitNumber(PRCbitStream &pbs, int32_t iValue, uint32_t uBitNumber)
+static void writeIntegerWithVariableBitNumber(PRCbitStream &pbs, int32_t iValue, uint32_t uBitNumber)
 { 
   WriteBoolean(iValue<0);
   WriteUnsignedIntegerWithVariableBitNumber(abs(iValue), uBitNumber - 1);
 }
 #define WriteIntegerWithVariableBitNumber( value, bit_number )  writeIntegerWithVariableBitNumber( pbs, (value), (bit_number) );
-
-void writeDoubleWithVariableBitNumber(PRCbitStream &pbs, double dValue,double dTolerance, unsigned uBitNumber)
+/*
+static void writeDoubleWithVariableBitNumber(PRCbitStream &pbs, double dValue,double dTolerance, unsigned uBitNumber)
 {
 // calling functions must ensure no overflow
   int32_t iTempValue = (int32_t) ( dValue / dTolerance );
   WriteIntegerWithVariableBitNumber(iTempValue, uBitNumber);
 }
 #define WriteDoubleWithVariableBitNumber( value, bit_number )  writeDoubleWithVariableBitNumber( pbs, (value), (bit_number) );
-
-uint32_t  GetNumberOfBitsUsedToStoreUnsignedInteger(uint32_t uValue)
+*/
+static uint32_t  GetNumberOfBitsUsedToStoreUnsignedInteger(uint32_t uValue)
 {
   uint32_t uNbBit=2;
   uint32_t uTemp = 2;
@@ -1240,7 +1247,7 @@ uint32_t  GetNumberOfBitsUsedToStoreUnsignedInteger(uint32_t uValue)
   return uNbBit-1;
 }
 
-void  writeNumberOfBitsThenUnsignedInteger(PRCbitStream &pbs, uint32_t unsigned_integer)
+static void  writeNumberOfBitsThenUnsignedInteger(PRCbitStream &pbs, uint32_t unsigned_integer)
 {
    uint32_t number_of_bits = GetNumberOfBitsUsedToStoreUnsignedInteger( unsigned_integer );
    WriteUnsignedIntegerWithVariableBitNumber ( number_of_bits, 5 )
@@ -1248,12 +1255,12 @@ void  writeNumberOfBitsThenUnsignedInteger(PRCbitStream &pbs, uint32_t unsigned_
 }
 #define WriteNumberOfBitsThenUnsignedInteger( value ) writeNumberOfBitsThenUnsignedInteger( pbs, value );
 
-uint32_t  GetNumberOfBitsUsedToStoreInteger(int32_t iValue)
+static uint32_t  GetNumberOfBitsUsedToStoreInteger(int32_t iValue)
 {
    return GetNumberOfBitsUsedToStoreUnsignedInteger(abs(iValue))+1;
 }
 
-int32_t intdiv(double dValue, double dTolerance)
+static int32_t intdiv(double dValue, double dTolerance)
 {
   double ratio=fabs(dValue)/dTolerance;
   assert(ratio <= INT_MAX);
@@ -1266,12 +1273,12 @@ int32_t intdiv(double dValue, double dTolerance)
 }
 
 // round dValue to nearest multiple of dTolerance
-double roundto(double dValue, double dTolerance)
+static double roundto(double dValue, double dTolerance)
 {
     return intdiv(dValue, dTolerance) * dTolerance;
 }
 
-PRCVector3d roundto(PRCVector3d vec, double dTolerance)
+static PRCVector3d roundto(PRCVector3d vec, double dTolerance)
 {
     PRCVector3d res;
     res.x = roundto(vec.x,dTolerance);
@@ -1279,12 +1286,12 @@ PRCVector3d roundto(PRCVector3d vec, double dTolerance)
     res.z = roundto(vec.z,dTolerance);
     return    res;
 }
-
-uint32_t  GetNumberOfBitsUsedToStoreDouble(double dValue, double dTolerance )
+/*
+static uint32_t  GetNumberOfBitsUsedToStoreDouble(double dValue, double dTolerance )
 {
    return GetNumberOfBitsUsedToStoreInteger(intdiv(dValue,dTolerance));
 }
-
+*/
 struct itriple
 {
   int32_t x;
@@ -1292,7 +1299,7 @@ struct itriple
   int32_t z;
 };
 
-uint32_t  GetNumberOfBitsUsedToStoreTripleInteger(const itriple &iTriple)
+static uint32_t  GetNumberOfBitsUsedToStoreTripleInteger(const itriple &iTriple)
 {
    const uint32_t x_bits = GetNumberOfBitsUsedToStoreInteger(iTriple.x);
    const uint32_t y_bits = GetNumberOfBitsUsedToStoreInteger(iTriple.y);
@@ -1305,7 +1312,7 @@ uint32_t  GetNumberOfBitsUsedToStoreTripleInteger(const itriple &iTriple)
    return bits;
 }
 
-itriple iroundto(PRCVector3d vec, double dTolerance)
+static itriple iroundto(PRCVector3d vec, double dTolerance)
 {
     itriple res;
     res.x = intdiv(vec.x, dTolerance);
@@ -1367,21 +1374,12 @@ void  PRCCompressedFace::serializeCompressedNurbs(PRCbitStream &pbs, double brep
    const uint32_t number_of_control_point_in_u = degree_in_u + 1;
    const uint32_t number_of_control_point_in_v = degree_in_v + 1;
 
-#if defined(__GNUC__) && !defined(__clang__)
-   PRCVector3d P[number_of_control_point_in_u][number_of_control_point_in_v];
-#else
    vector<vector<PRCVector3d> > P(number_of_control_point_in_u, vector<PRCVector3d>(number_of_control_point_in_v));
-#endif
    for(uint32_t i=0;i<number_of_control_point_in_u;i++)
    for(uint32_t j=0;j<number_of_control_point_in_v;j++)
       P[i][j] = control_point[i*number_of_control_point_in_v+j];
-#ifdef __GNUC__
-   itriple compressed_control_point[number_of_control_point_in_u][number_of_control_point_in_v];
-   uint32_t control_point_type[number_of_control_point_in_u][number_of_control_point_in_v];
-#else
    vector<vector<itriple> > compressed_control_point(number_of_control_point_in_u, vector<itriple>(number_of_control_point_in_v));
    vector<vector<uint32_t> > control_point_type(number_of_control_point_in_u, vector<uint32_t>(number_of_control_point_in_v));
-#endif
 
    uint32_t number_of_bits_for_isomin = 1;
    uint32_t number_of_bits_for_rest = 1;
@@ -1603,6 +1601,15 @@ void  PRCCone::serializeCone(PRCbitStream &pbs)
    SerializeUVParameterization
    WriteDouble ( bottom_radius )
    WriteDouble ( semi_angle )
+}
+
+void  PRCPlane::serializePlane(PRCbitStream &pbs)
+{ 
+   WriteUnsignedInteger (PRC_TYPE_SURF_Plane) 
+
+   SerializeContentSurface
+   SerializeTransformation
+   SerializeUVParameterization
 }
 
 void  PRCCylinder::serializeCylinder(PRCbitStream &pbs)
@@ -1957,9 +1964,58 @@ void PRCUnit::serializeUnit(PRCbitStream &pbs)
    WriteDouble (unit)
 }
 
+void PRCSceneDisplayParameters::serializeSceneDisplayParameters(PRCbitStream &pbs)
+{
+  WriteUnsignedInteger (PRC_TYPE_GRAPH_SceneDisplayParameters)
+  
+  SerializeContentPRCBase
+  WriteBoolean (is_active)
+  
+  const uint32_t number_of_lights = 0;
+  WriteUnsignedInteger (number_of_lights)
+  // for (i=0;i<number_of_lights;i++)
+  //  SerializeAmbientLight (lights[i])
+  
+  const bool camera = false;
+  WriteBit (camera)
+  //  if (camera)
+  //    SerializeCamera (camera)
+  
+  const bool rotation_center = false;
+  WriteBit (rotation_center)
+  // if (rotation_center)
+  //  SerializeVector3d (rotation_center)
+  
+  const uint32_t number_of_clipping_planes = clipping_planes.size();
+  WriteUnsignedInteger (number_of_clipping_planes)
+  for (uint32_t i=0;i<number_of_clipping_planes;i++)
+    SerializePlane (clipping_planes[i])
+    
+    const uint32_t background_style = m1;
+  SerializeLineAttr (background_style)
+  const uint32_t default_style = m1;
+  
+  SerializeLineAttr (default_style)
+  
+  
+  const uint32_t number_of_default_styles_per_type = 0;
+  WriteUnsignedInteger (number_of_default_styles_per_type)
+  // for (i=0;i<number_of_default_styles_by_type;i++)
+  // {
+  //   WriteUnsignedInteger (types[i])
+  //   SerializeLineAttr (default_styles_per_type[i])
+  // }
+  
+  WriteBoolean (is_absolute)
+  
+  
+  
+}
+
+
 void PRCProductOccurrence::serializeProductOccurrence(PRCbitStream &pbs)
 {
-   WriteUnsignedInteger ( PRC_TYPE_ASM_ProductOccurence ) 
+   WriteUnsignedInteger ( PRC_TYPE_ASM_ProductOccurence )
 
    SerializePRCBaseWithGraphics 
 
@@ -1998,17 +2054,16 @@ void PRCProductOccurrence::serializeProductOccurrence(PRCbitStream &pbs)
    
    WriteUnsignedInteger (0) // number_of_references
    
-// SerializeMarkups (markups)
-   WriteUnsignedInteger (0) // number_of_linked_items 
-   WriteUnsignedInteger (0) // number_of_leaders 
-   WriteUnsignedInteger (0) // number_of_markups 
-   WriteUnsignedInteger (0) // number_of_annotation_entities 
-
+   SerializeMarkups
    
    WriteUnsignedInteger (0) // number_of_views
    WriteBit (false) // has_entity_filter
    WriteUnsignedInteger (0) // number_of_display_filters
-   WriteUnsignedInteger (0) // number_of_scene_display_parameters
+  
+  const uint32_t number_of_scene_display_parameters = scene_display_parameters.size();
+  WriteUnsignedInteger (number_of_scene_display_parameters)
+  for (uint32_t i=0;i<number_of_scene_display_parameters;i++)
+    SerializeSceneDisplayParameters (scene_display_parameters[i])
 
    SerializeUserData
 }
@@ -2074,11 +2129,7 @@ void PRCPartDefinition::serializePartDefinition(PRCbitStream &pbs)
   for (uint32_t i=0;i<number_of_representation_items;i++)
     SerializeRepresentationItem (representation_item[i])
 	
-  // SerializeMarkups (markups)
-  WriteUnsignedInteger (0) // number_of_linked_items 
-  WriteUnsignedInteger (0) // number_of_leaders 
-  WriteUnsignedInteger (0) // number_of_markups 
-  WriteUnsignedInteger (0) // number_of_annotation_entities 
+  SerializeMarkups
 
   WriteUnsignedInteger (0) // number_of_views
   SerializeUserData
