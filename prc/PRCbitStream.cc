@@ -3,6 +3,7 @@
 *   This file is part of a tool for producing 3D content in the PRC format.
 *   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
 *   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
+*   Copyright (C) 2019  Jan Stalmach <jan.stalmach (at) dlubal dot cz>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by

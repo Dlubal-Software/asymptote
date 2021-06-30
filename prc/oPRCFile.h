@@ -3,6 +3,7 @@
 *   This file is part of a tool for producing 3D content in the PRC format.
 *   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
 *   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
+*   Copyright (C) 2019  Jan Stalmach <jan.stalmach (at) dlubal dot cz>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -39,6 +40,7 @@
 #include "config.h"
 #endif
 
+#include "PRC_global.h"
 #include "PRC.h"
 #include "PRCbitStream.h"
 #include "writePRC.h"
@@ -59,7 +61,7 @@ struct RGBAColour
     R(r), G(g), B(b), A(a) {}
   double R,G,B,A;
 
-  void Set(double r, double g, double b, double a=1.0) 
+  void Set(double r, double g, double b, double a=1.0)
   {
     R = r; G = g; B = b; A = a;
   }
@@ -88,7 +90,7 @@ struct RGBAColour
 };
 typedef std::map<RGBAColour,uint32_t> PRCcolourMap;
 
-struct RGBAColourWidth
+struct ASYMPTOTE_EXPORT RGBAColourWidth
 {
   RGBAColourWidth(double r=0.0, double g=0.0, double b=0.0, double a=1.0, double w=1.0) :
     R(r), G(g), B(b), A(a), W(w) {}
@@ -120,10 +122,10 @@ struct PRCmaterial
   PRCmaterial(const RGBAColour &a, const RGBAColour &d, const RGBAColour &e,
               const RGBAColour &s, double p, double h, double w=1.0) :
   ambient(a), diffuse(d), emissive(e), specular(s), alpha(p), shininess(h), width(w) {}
-  
+
   RGBAColour ambient,diffuse,emissive,specular;
   double alpha,shininess,width;
-  
+
   bool operator==(const PRCmaterial &c) const
   {
     return (EQFLD(ambient)   &&
@@ -150,15 +152,15 @@ typedef std::map<PRCmaterial,uint32_t> PRCmaterialMap;
 
 #undef EQFLD
 #undef COMPFLD
-                 
+
 struct PRCtexture
 {
-  PRCtexture() : 
+  PRCtexture() :
   data(NULL), format(KEPRCPicture_BITMAP_RGBA_BYTE), width(0), height(0), size(0),
   mapping(0), components(PRC_TEXTURE_MAPPING_COMPONENTS_RGBA),
   function(KEPRCTextureFunction_Modulate), texture_applying_mode(PRC_TEXTURE_APPLYING_MODE_NONE),
   wrapping_mode_S(KEPRCTextureWrappingMode_Repeat), wrapping_mode_T(KEPRCTextureWrappingMode_Repeat) {}
-  
+
   const uint8_t* data;
   EPRCPictureDataFormat format;
   /*
@@ -172,15 +174,15 @@ struct PRCtexture
   uint32_t width;   // may be omitted for PNG and JPEG
   uint32_t height;  // too
   uint32_t size;
-  
+
   uint32_t mapping;
   /*
   PRC_TEXTURE_MAPPING_DIFFUSE
   PRC_TEXTURE_MAPPING_BUMP
-  PRC_TEXTURE_MAPPING_OPACITY 
+  PRC_TEXTURE_MAPPING_OPACITY
   PRC_TEXTURE_MAPPING_SPHERICAL_REFLECTION
   */
-  
+
   uint8_t components;
   /*
     PRC_TEXTURE_MAPPING_COMPONENTS_RED
@@ -190,7 +192,7 @@ struct PRCtexture
     PRC_TEXTURE_MAPPING_COMPONENTS_ALPHA
     PRC_TEXTURE_MAPPING_COMPONENTS_RGBA
   */
-  
+
   EPRCTextureFunction function;
   /*
    enum EPRCTextureFunction {			// Defines how to paint a texture on the surface being rendered.
@@ -319,7 +321,7 @@ typedef std::vector<PRCtessquad> PRCtessquadList;
 /*
 struct PRCtesstriangle // textured triangle
 {
-  PRCtesstriangle() : 
+  PRCtesstriangle() :
   style(m1) {}
   PRCVector3d vertices[3];
 // PRCVector3d normals[3];
@@ -386,12 +388,12 @@ public:
       tess(tess), do_break(do_break), no_break(no_break), crease_angle(crease_angle), check_uniqueness(check_uniqueness) {}
 };
 
-class PRCgroup
+class ASYMPTOTE_EXPORT PRCgroup
 {
  public:
-  PRCgroup() : 
+  PRCgroup() :
     product_occurrence(NULL), parent_product_occurrence(NULL), part_definition(NULL), parent_part_definition(NULL), transform(NULL) {}
-  PRCgroup(const std::string& name) : 
+  PRCgroup(const std::string& name) :
     product_occurrence(NULL), parent_product_occurrence(NULL), part_definition(NULL), parent_part_definition(NULL), transform(NULL), name(name) {}
   PRCProductOccurrence *product_occurrence, *parent_product_occurrence;
   PRCPartDefinition *part_definition, *parent_part_definition;
@@ -517,7 +519,7 @@ class PRCFileStructure : public PRCStartHeader
 #define ADD_ADDUNIQ( prctype ) \
 uint32_t add##prctype( PRC##prctype*& p##prctype ); \
 uint32_t add##prctype##Unique( PRC##prctype*& p##prctype);
-  
+
   ADD_ADDUNIQ( UncompressedFile   )
   ADD_ADDUNIQ( Picture            )
   ADD_ADDUNIQ( TextureDefinition  )
@@ -576,7 +578,7 @@ class PRCHeader : public PRCStartHeader
 
 typedef std::map <PRCGeneralTransformation3d,uint32_t> PRCtransformMap;
 
-class oPRCFile
+class ASYMPTOTE_EXPORT oPRCFile
 {
   public:
     oPRCFile(std::ostream &os, double u=1, uint32_t n=1) :
@@ -652,7 +654,7 @@ class oPRCFile
     std::string lastgroupname;
     std::vector<std::string> lastgroupnames;
     std::string calculate_unique_name(const ContentPRCBase *prc_entity,const ContentPRCBase *prc_occurence);
-    
+
     bool finish();
     uint32_t getSize();
 
@@ -682,6 +684,8 @@ class oPRCFile
     uint32_t addTransform(PRCGeneralTransformation3d*& transform);
     uint32_t addTransform(const double* t);
     uint32_t addTransform(const double origin[3], const double x_axis[3], const double y_axis[3], double scale);
+
+    void addPoint(const PRCVector3d& point, const RGBAColour& color, double);
     void addPoint(const double P[3], const RGBAColour &c, double w=1.0);
     void addPoint(double x, double y, double z, const RGBAColour &c, double w);
     void addPoints(uint32_t n, const double P[][3], const RGBAColour &c, double w=1.0);
@@ -777,7 +781,8 @@ class oPRCFile
            { useLines(tess_index,addLineMaterial(c,w),origin, x_axis, y_axis, scale); }
 
 //  void addTriangle(const double P[][3], const double T[][2], uint32_t style_index);
-  
+
+    void addLine(const std::vector<PRCVector3d>& points, const RGBAColour& c, double w = 1.0);
     void addLine(uint32_t n, const double P[][3], const RGBAColour &c, double w=1.0);
     void addSegment(const double P1[3], const double P2[3], const RGBAColour &c, double w=1.0);
 
@@ -812,7 +817,7 @@ class oPRCFile
   { return fileStructures[fileStructure]->add##prctype( p##prctype ); } \
   uint32_t add##prctype##Unique(PRC##prctype*& p##prctype, uint32_t fileStructure=0) \
   { return fileStructures[fileStructure]->add##prctype##Unique(p##prctype); }
-  
+
   ADD_ADDUNIQ( TextureDefinition  )
   ADD_ADDUNIQ( TextureApplication )
   ADD_ADDUNIQ( MaterialGeneric    )

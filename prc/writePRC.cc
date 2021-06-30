@@ -3,6 +3,7 @@
 *   This file is part of a tool for producing 3D content in the PRC format.
 *   Copyright (C) 2008  Orest Shardt <shardtor (at) gmail dot com>
 *   Copyright (C) 2013  Michail Vidiassov <master (at) iaas dot msu dot ru>
+*   Copyright (C) 2019  Jan Stalmach <jan.stalmach (at) dlubal dot cz>
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -303,7 +304,7 @@ void PRCAttribute::serializeAttribute(PRCbitStream &pbs) const
   WriteUnsignedInteger (PRC_TYPE_MISC_Attribute) 
   
   SerializeAttributeEntry
-  const uint32_t size_of_attribute_keys = attribute_keys.size();
+  const uint32_t size_of_attribute_keys = static_cast<uint32_t>(attribute_keys.size());
   WriteUnsignedInteger (size_of_attribute_keys) 
   for(uint32_t i=0;i<size_of_attribute_keys;i++) 
     SerializeContentSingleAttribute (attribute_keys[i]) 
@@ -316,7 +317,7 @@ void PRCAttributes::serializeAttributes(PRCbitStream &pbs) const
     WriteUnsignedInteger (number_of_attributes) 
     return;
   }
-  const uint32_t number_of_attributes = attributes.size();
+  const uint32_t number_of_attributes = static_cast<uint32_t>(attributes.size());
   WriteUnsignedInteger (number_of_attributes) 
   for(PRCAttributeList::const_iterator it = attributes.begin(); it != attributes.end(); ++it)
   {
@@ -363,7 +364,7 @@ void PRCUncompressedFile::serializeUncompressedFile(ostream &out) const
 
 uint32_t PRCUncompressedFile::getSize() const
 {
-  return sizeof(uint32_t)+file_contents.size();
+  return sizeof(uint32_t) + static_cast<uint32_t>(file_contents.size());
 }
 
 void PRCRgbColor::serializeRgbColor(PRCbitStream &pbs)
@@ -502,7 +503,7 @@ void PRCLinePattern::serializeLinePattern(PRCbitStream &pbs)
   WriteUnsignedInteger (PRC_TYPE_GRAPH_LinePattern)
   SerializeContentPRCBase
   
-  const uint32_t size_lengths = lengths.size();
+  const uint32_t size_lengths = static_cast<uint32_t>(lengths.size());
   WriteUnsignedInteger (size_lengths)
   for (i=0;i<size_lengths;i++)
     WriteDouble (lengths[i])
@@ -608,11 +609,11 @@ void  PRCMarkups::serializeMarkups(PRCbitStream &pbs)
 {
    WriteUnsignedInteger (0) // number_of_linked_items
    WriteUnsignedInteger (0) // number_of_leaders
-   const uint32_t number_of_markups = markups.size();
+   const uint32_t number_of_markups = static_cast<uint32_t>(markups.size());
    WriteUnsignedInteger (number_of_markups)
    for (uint32_t i=0;i<number_of_markups;i++)
       SerializeMarkup (markups[i])
-   const uint32_t number_of_annotation_entities = annotation_entities.size();
+   const uint32_t number_of_annotation_entities = static_cast<uint32_t>(annotation_entities.size());
    WriteUnsignedInteger (number_of_annotation_entities)
    for (uint32_t i=0;i<number_of_annotation_entities;i++)
       SerializeAnnotationEntity (annotation_entities[i])
@@ -622,14 +623,14 @@ uint32_t PRCMarkups::addMarkup(PRCMarkup*& pMarkup)
 {
    markups.push_back(pMarkup);
    pMarkup = NULL;
-   return markups.size()-1;
+   return static_cast<uint32_t>(markups.size()-1);
 }
 
 uint32_t PRCMarkups::addAnnotationItem(PRCAnnotationItem*& pAnnotationItem)
 {
    annotation_entities.push_back(pAnnotationItem);
    pAnnotationItem = NULL;
-   return annotation_entities.size()-1;
+   return static_cast<uint32_t>(annotation_entities.size()-1);
 }
 
 void  PRCAnnotationItem::serializeAnnotationItem(PRCbitStream &pbs)
@@ -682,7 +683,7 @@ void  PRCPointSet::serializePointSet(PRCbitStream &pbs)
 
   SerializeRepresentationItemContent 
 
-  const uint32_t number_of_points = point.size();
+  const uint32_t number_of_points = static_cast<uint32_t>(point.size());
   WriteUnsignedInteger (number_of_points)
   for (uint32_t i=0;i<number_of_points;i++)
   {
@@ -697,7 +698,7 @@ void  PRCSet::serializeSet(PRCbitStream &pbs)
 
   SerializeRepresentationItemContent 
 
-  const uint32_t number_of_elements = elements.size();
+  const uint32_t number_of_elements = static_cast<uint32_t>(elements.size());
   WriteUnsignedInteger (number_of_elements)
   for (uint32_t i=0;i<number_of_elements;i++)
   {
@@ -710,49 +711,49 @@ uint32_t PRCSet::addBrepModel(PRCBrepModel*& pBrepModel)
 {
   elements.push_back(pBrepModel);
   pBrepModel = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 uint32_t PRCSet::addPolyBrepModel(PRCPolyBrepModel*& pPolyBrepModel)
 {
   elements.push_back(pPolyBrepModel);
   pPolyBrepModel = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 uint32_t PRCSet::addPointSet(PRCPointSet*& pPointSet)
 {
   elements.push_back(pPointSet);
   pPointSet  = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 uint32_t PRCSet::addSet(PRCSet*& pSet)
 {
   elements.push_back(pSet);
   pSet = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 uint32_t PRCSet::addWire(PRCWire*& pWire)
 {
   elements.push_back(pWire);
   pWire = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 uint32_t PRCSet::addPolyWire(PRCPolyWire*& pPolyWire)
 {
   elements.push_back(pPolyWire);
   pPolyWire = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 uint32_t PRCSet::addRepresentationItem(PRCRepresentationItem*& pRepresentationItem)
 {
   elements.push_back(pRepresentationItem);
   pRepresentationItem = NULL;
-  return elements.size()-1;
+  return static_cast<uint32_t>(elements.size()-1);
 }
 
 void  PRCWire::serializeWire(PRCbitStream &pbs)
@@ -870,7 +871,7 @@ void  PRCFontKeysSameFont::serializeFontKeysSameFont(PRCbitStream &pbs)
   uint32_t i=0; // universal index for PRC standart compatibility
   WriteString (font_name)
   WriteUnsignedInteger (char_set)
-  const uint32_t number_of_font_keys = font_keys.size();
+  const uint32_t number_of_font_keys = static_cast<uint32_t>(font_keys.size());
   WriteUnsignedInteger (number_of_font_keys)
   for (i=0;i<number_of_font_keys;i++)
   {
@@ -887,7 +888,7 @@ static void SerializeArrayRGBA (const std::vector<uint8_t> &rgba_vertices,const 
 // number_of_vectors is equal to number_of_colors / number_by_vector.
   const uint32_t number_by_vector=is_rgba?4:3;
   const std::vector<uint8_t> &vector_color = rgba_vertices;
-  const uint32_t number_of_colors=vector_color.size();
+  const uint32_t number_of_colors= static_cast<uint32_t>(vector_color.size());
   const uint32_t number_of_vectors=number_of_colors / number_by_vector;
   // first one 
   for (i=0;i<number_by_vector;i++)
@@ -918,13 +919,13 @@ void  PRCTessFace::serializeTessFace(PRCbitStream &pbs)
   uint32_t i=0; // universal index for PRC standart compatibility
   WriteUnsignedInteger (PRC_TYPE_TESS_Face)
 
-  const uint32_t size_of_line_attributes=line_attributes.size();
+  const uint32_t size_of_line_attributes= static_cast<uint32_t>(line_attributes.size());
   WriteUnsignedInteger (size_of_line_attributes) 
   for (i=0;i<size_of_line_attributes;i++) 
      SerializeLineAttr (line_attributes[i])
 
   WriteUnsignedInteger (start_wire) 
-  const uint32_t size_of_sizes_wire=sizes_wire.size();
+  const uint32_t size_of_sizes_wire= static_cast<uint32_t>(sizes_wire.size());
   WriteUnsignedInteger (size_of_sizes_wire) 
   for (i=0;i<size_of_sizes_wire;i++) 
      WriteUnsignedInteger (sizes_wire[i])
@@ -932,7 +933,7 @@ void  PRCTessFace::serializeTessFace(PRCbitStream &pbs)
   WriteUnsignedInteger (used_entities_flag) 
 
   WriteUnsignedInteger (start_triangulated) 
-  const uint32_t size_of_sizes_triangulated=sizes_triangulated.size();
+  const uint32_t size_of_sizes_triangulated= static_cast<uint32_t>(sizes_triangulated.size());
   WriteUnsignedInteger (size_of_sizes_triangulated) 
   for (i=0;i<size_of_sizes_triangulated;i++) 
      WriteUnsignedInteger (sizes_triangulated[i])
@@ -977,7 +978,7 @@ void  PRCContentBaseTessData::serializeContentBaseTessData(PRCbitStream &pbs)
 {
   uint32_t i=0; // universal index for PRC standart compatibility
   WriteBoolean (is_calculated)
-  const uint32_t number_of_coordinates = coordinates.size();
+  const uint32_t number_of_coordinates = static_cast<uint32_t>(coordinates.size());
   WriteUnsignedInteger (number_of_coordinates)
   for (i=0;i<number_of_coordinates;i++)
      WriteDouble (coordinates[i])
@@ -990,7 +991,7 @@ void  PRC3DTess::serialize3DTess(PRCbitStream &pbs)
   SerializeContentBaseTessData 
   WriteBoolean (has_faces)
   WriteBoolean (has_loops)
-  const bool must_recalculate_normals=normal_coordinate.empty();
+  const bool must_recalculate_normals= static_cast<uint32_t>(normal_coordinate.empty());
   WriteBoolean (must_recalculate_normals)
   if (must_recalculate_normals)
   {
@@ -1001,28 +1002,28 @@ void  PRC3DTess::serialize3DTess(PRCbitStream &pbs)
      WriteDouble (crease_angle)
   }
   
-  const uint32_t number_of_normal_coordinates=normal_coordinate.size();
+  const uint32_t number_of_normal_coordinates= static_cast<uint32_t>(normal_coordinate.size());
   WriteUnsignedInteger (number_of_normal_coordinates)
   for (i=0;i<number_of_normal_coordinates;i++)
      WriteDouble (normal_coordinate[i])
   
-  const uint32_t number_of_wire_indices=wire_index.size();
+  const uint32_t number_of_wire_indices= static_cast<uint32_t>(wire_index.size());
   WriteUnsignedInteger (number_of_wire_indices)
   for (i=0;i<number_of_wire_indices;i++)
      WriteUnsignedInteger (wire_index[i])
   
   // note : those can be single triangles, triangle fans or stripes
-  const uint32_t number_of_triangulated_indices=triangulated_index.size();
+  const uint32_t number_of_triangulated_indices= static_cast<uint32_t>(triangulated_index.size());
   WriteUnsignedInteger (number_of_triangulated_indices)
   for (i=0;i<number_of_triangulated_indices;i++)
      WriteUnsignedInteger (triangulated_index[i])
   
-  const uint32_t number_of_face_tessellation=face_tessellation.size();
+  const uint32_t number_of_face_tessellation= static_cast<uint32_t>(face_tessellation.size());
   WriteUnsignedInteger (number_of_face_tessellation)
   for (i=0;i<number_of_face_tessellation;i++)
      SerializeTessFace (face_tessellation[i])
   
-  const uint32_t number_of_texture_coordinates=texture_coordinate.size();
+  const uint32_t number_of_texture_coordinates= static_cast<uint32_t>(texture_coordinate.size());
   WriteUnsignedInteger (number_of_texture_coordinates)
   for (i=0;i<number_of_texture_coordinates;i++)
      WriteDouble (texture_coordinate[i])
@@ -1041,7 +1042,7 @@ void  PRC3DWireTess::serialize3DWireTess(PRCbitStream &pbs)
   uint32_t i=0; // universal index for PRC standart compatibility
   WriteUnsignedInteger (PRC_TYPE_TESS_3D_Wire)
   SerializeContentBaseTessData 
-  const uint32_t number_of_wire_indexes=wire_indexes.size();
+  const uint32_t number_of_wire_indexes= static_cast<uint32_t>(wire_indexes.size());
   WriteUnsignedInteger (number_of_wire_indexes)
   for (i=0;i<number_of_wire_indexes;i++)
      WriteUnsignedInteger (wire_indexes[i])
@@ -1073,11 +1074,11 @@ void  PRCMarkupTess::serializeMarkupTess(PRCbitStream &pbs)
   WriteUnsignedInteger (PRC_TYPE_TESS_Markup)
   SerializeContentBaseTessData 
 
-  const uint32_t number_of_codes=codes.size();
+  const uint32_t number_of_codes= static_cast<uint32_t>(codes.size());
   WriteUnsignedInteger (number_of_codes)
   for (i=0;i<number_of_codes;i++)
      WriteUnsignedInteger (codes[i])
-  const uint32_t number_of_texts=texts.size();
+  const uint32_t number_of_texts= static_cast<uint32_t>(texts.size());
   WriteUnsignedInteger (number_of_texts)
   for (i=0;i<number_of_texts;i++)
      WriteString (texts[i])
@@ -1166,8 +1167,8 @@ void  PRCNURBSSurface::serializeNURBSSurface(PRCbitStream &pbs)
    WriteBoolean ( is_rational )
    WriteUnsignedInteger ( degree_in_u )
    WriteUnsignedInteger ( degree_in_v )
-   const uint32_t highest_index_of_knots_in_u = knot_u.size()-1;
-   const uint32_t highest_index_of_knots_in_v = knot_v.size()-1;
+   const uint32_t highest_index_of_knots_in_u = static_cast<uint32_t>(knot_u.size()-1);
+   const uint32_t highest_index_of_knots_in_v = static_cast<uint32_t>(knot_v.size()-1);
    const uint32_t highest_index_of_control_point_in_u = highest_index_of_knots_in_u - degree_in_u - 1;
    const uint32_t highest_index_of_control_point_in_v = highest_index_of_knots_in_v - degree_in_v - 1;
    WriteUnsignedInteger ( highest_index_of_control_point_in_u )
@@ -1521,7 +1522,7 @@ void  PRCCompressedFace::serializeCompressedNurbs(PRCbitStream &pbs, double brep
 void PRCCompressedBrepData::serializeCompressedShell(PRCbitStream &pbs)
 {
    uint32_t i;
-   const uint32_t number_of_face = face.size();
+   const uint32_t number_of_face = static_cast<uint32_t>(face.size());
    WriteBoolean ( number_of_face == 1 )
 
    if( number_of_face != 1 )
@@ -1554,7 +1555,7 @@ void PRCCompressedBrepData::serializeCompressedBrepData(PRCbitStream &pbs)
    serializeCompressedShell( pbs );
 
    uint32_t i;
-   const uint32_t number_of_faces = face.size();
+   const uint32_t number_of_faces = static_cast<uint32_t>(face.size());
    for(i=0; i< number_of_faces; i++)
       face[i]->serializeBaseTopology( pbs );
 }
@@ -1661,7 +1662,7 @@ void PRCShell::serializeShell(PRCbitStream &pbs)
 
    SerializeBaseTopology
    WriteBoolean ( shell_is_closed )
-   uint32_t number_of_face = face.size();
+   uint32_t number_of_face = static_cast<uint32_t>(face.size());
    WriteUnsignedInteger ( number_of_face ) 
    for (i=0;i<number_of_face;i++)
    {
@@ -1683,7 +1684,7 @@ void PRCConnex::serializeConnex(PRCbitStream &pbs)
    WriteUnsignedInteger (PRC_TYPE_TOPO_Connex) 
 
    SerializeBaseTopology
-   uint32_t number_of_shell = shell.size();
+   uint32_t number_of_shell = static_cast<uint32_t>(shell.size());
    WriteUnsignedInteger ( number_of_shell ) 
    for (i=0;i<number_of_shell;i++)
    {
@@ -1704,7 +1705,7 @@ void PRCBrepData::serializeBrepData(PRCbitStream &pbs)
    WriteUnsignedInteger ( PRC_TYPE_TOPO_BrepData) 
 
    SerializeContentBody 
-   uint32_t number_of_connex = connex.size();
+   uint32_t number_of_connex = static_cast<uint32_t>(connex.size());
    WriteUnsignedInteger ( number_of_connex ) 
    for ( i=0; i<number_of_connex; i++)
    {
@@ -1751,8 +1752,8 @@ void  PRCNURBSCurve::serializeNURBSCurve(PRCbitStream &pbs)
    SerializeContentCurve 
    WriteBoolean ( is_rational )
    WriteUnsignedInteger ( degree )
-   uint32_t highest_index_of_control_point = control_point.size()-1;
-   uint32_t highest_index_of_knots = knot.size()-1;
+   uint32_t highest_index_of_control_point = static_cast<uint32_t>(control_point.size()-1);
+   uint32_t highest_index_of_knots = static_cast<uint32_t>(knot.size()-1);
    WriteUnsignedInteger ( highest_index_of_control_point )
    WriteUnsignedInteger ( highest_index_of_knots )
    for (i=0; i<=highest_index_of_control_point; i++)
@@ -1778,7 +1779,7 @@ void  PRCPolyLine::serializePolyLine(PRCbitStream &pbs)
    SerializeContentCurve 
    SerializeTransformation
    SerializeParameterization
-   uint32_t number_of_point = point.size();
+   uint32_t number_of_point = static_cast<uint32_t>(point.size());
    WriteUnsignedInteger ( number_of_point ) 
    for (i=0; i<number_of_point; i++) 
    {
@@ -1807,7 +1808,7 @@ void  PRCComposite::serializeComposite(PRCbitStream &pbs)
    SerializeContentCurve 
    SerializeTransformation
    SerializeParameterization
-   uint32_t number_of_curves = base_curve.size();
+   uint32_t number_of_curves = static_cast<uint32_t>(base_curve.size());
    WriteUnsignedInteger ( number_of_curves ) 
    for (i=0; i<number_of_curves; i++) 
    {
@@ -1837,7 +1838,7 @@ void PRCTopoContext::serializeContextAndBodies(PRCbitStream &pbs)
 { 
    uint32_t i=0;
    SerializeTopoContext 
-   uint32_t number_of_bodies = body.size();
+   uint32_t number_of_bodies = static_cast<uint32_t>(body.size());
    WriteUnsignedInteger (number_of_bodies) 
    for (i=0;i<number_of_bodies;i++) 
       SerializeBody (body[i]) 
@@ -1846,7 +1847,7 @@ void PRCTopoContext::serializeContextAndBodies(PRCbitStream &pbs)
 void PRCTopoContext::serializeGeometrySummary(PRCbitStream &pbs)
 { 
    uint32_t i=0;
-   uint32_t number_of_bodies = body.size();
+   uint32_t number_of_bodies = static_cast<uint32_t>(body.size());
    WriteUnsignedInteger (number_of_bodies) 
    for (i=0;i<number_of_bodies;i++) 
    {
@@ -1862,7 +1863,7 @@ void PRCTopoContext::serializeContextGraphics(PRCbitStream &pbs)
 { 
    uint32_t i=0, j=0, k=0, l=0;
    ResetCurrentGraphics
-   uint32_t number_of_body = body.size();
+   uint32_t number_of_body = static_cast<uint32_t>(body.size());
    PRCGraphicsList element;
    bool has_graphics = false;
    for (i=0;i<number_of_body;i++)
@@ -1900,7 +1901,7 @@ void PRCTopoContext::serializeContextGraphics(PRCbitStream &pbs)
    {
       const uint32_t element_type = PRC_TYPE_TOPO_Face;
       WriteUnsignedInteger (element_type) 
-      const uint32_t number_of_element = element.size();
+      const uint32_t number_of_element = static_cast<uint32_t>(element.size());
       WriteUnsignedInteger (number_of_element) 
       for (j=0;j<number_of_element;j++) 
       {
@@ -1917,21 +1918,21 @@ uint32_t PRCTopoContext::addSingleWireBody(PRCSingleWireBody*& pSingleWireBody)
 {
   body.push_back(pSingleWireBody);
   pSingleWireBody = NULL;
-  return body.size()-1;
+  return static_cast<uint32_t>(body.size()-1);
 }
 
 uint32_t PRCTopoContext::addBrepData(PRCBrepData*& pBrepData)
 {
   body.push_back(pBrepData);
   pBrepData = NULL;
-  return body.size()-1;
+  return static_cast<uint32_t>(body.size()-1);
 }
 
 uint32_t PRCTopoContext::addCompressedBrepData(PRCCompressedBrepData*& pCompressedBrepData)
 {
   body.push_back(pCompressedBrepData);
   pCompressedBrepData = NULL;
-  return body.size()-1;
+  return static_cast<uint32_t>(body.size()-1);
 }
 
 void PRCSingleWireBody::serializeSingleWireBody(PRCbitStream &pbs)
@@ -1986,12 +1987,12 @@ void PRCSceneDisplayParameters::serializeSceneDisplayParameters(PRCbitStream &pb
   // if (rotation_center)
   //  SerializeVector3d (rotation_center)
   
-  const uint32_t number_of_clipping_planes = clipping_planes.size();
+  const uint32_t number_of_clipping_planes = static_cast<uint32_t>(clipping_planes.size());
   WriteUnsignedInteger (number_of_clipping_planes)
   for (uint32_t i=0;i<number_of_clipping_planes;i++)
     SerializePlane (clipping_planes[i])
     
-    const uint32_t background_style = m1;
+  const uint32_t background_style = m1;
   SerializeLineAttr (background_style)
   const uint32_t default_style = m1;
   
@@ -2035,7 +2036,7 @@ void PRCProductOccurrence::serializeProductOccurrence(PRCbitStream &pbs)
       if (!external_data_in_same_file_structure)
          SerializeCompressedUniqueId (external_data_file_structure)
    }
-   const uint32_t number_of_son_product_occurrences = index_son_occurrence.size();
+   const uint32_t number_of_son_product_occurrences = static_cast<uint32_t>(index_son_occurrence.size());
    WriteUnsignedInteger (number_of_son_product_occurrences)
    for (uint32_t i=0;i<number_of_son_product_occurrences;i++)
       WriteUnsignedInteger (index_son_occurrence[i])
@@ -2060,7 +2061,7 @@ void PRCProductOccurrence::serializeProductOccurrence(PRCbitStream &pbs)
    WriteBit (false) // has_entity_filter
    WriteUnsignedInteger (0) // number_of_display_filters
   
-  const uint32_t number_of_scene_display_parameters = scene_display_parameters.size();
+  const uint32_t number_of_scene_display_parameters = static_cast<uint32_t>(scene_display_parameters.size());
   WriteUnsignedInteger (number_of_scene_display_parameters)
   for (uint32_t i=0;i<number_of_scene_display_parameters;i++)
     SerializeSceneDisplayParameters (scene_display_parameters[i])
@@ -2072,49 +2073,49 @@ uint32_t PRCPartDefinition::addBrepModel(PRCBrepModel*& pBrepModel)
 {
   representation_item.push_back(pBrepModel);
   pBrepModel = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 uint32_t PRCPartDefinition::addPolyBrepModel(PRCPolyBrepModel*& pPolyBrepModel)
 {
   representation_item.push_back(pPolyBrepModel);
   pPolyBrepModel = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 uint32_t PRCPartDefinition::addPointSet(PRCPointSet*& pPointSet)
 {
   representation_item.push_back(pPointSet);
   pPointSet = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 uint32_t PRCPartDefinition::addSet(PRCSet*& pSet)
 {
   representation_item.push_back(pSet);
   pSet = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 uint32_t PRCPartDefinition::addWire(PRCWire*& pWire)
 {
   representation_item.push_back(pWire);
   pWire = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 uint32_t PRCPartDefinition::addPolyWire(PRCPolyWire*& pPolyWire)
 {
   representation_item.push_back(pPolyWire);
   pPolyWire = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 uint32_t PRCPartDefinition::addRepresentationItem(PRCRepresentationItem*& pRepresentationItem)
 {
   representation_item.push_back(pRepresentationItem);
   pRepresentationItem = NULL;
-  return representation_item.size()-1;
+  return static_cast<uint32_t>(representation_item.size() - 1);
 }
 
 void PRCPartDefinition::serializePartDefinition(PRCbitStream &pbs)
@@ -2124,7 +2125,7 @@ void PRCPartDefinition::serializePartDefinition(PRCbitStream &pbs)
   SerializePRCBaseWithGraphics
   SerializeBoundingBox
 
-  uint32_t number_of_representation_items = representation_item.size();
+  uint32_t number_of_representation_items = static_cast<uint32_t>(representation_item.size());
   WriteUnsignedInteger (number_of_representation_items)
   for (uint32_t i=0;i<number_of_representation_items;i++)
     SerializeRepresentationItem (representation_item[i])
